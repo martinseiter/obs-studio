@@ -16,6 +16,8 @@ if(WIN32)
 	add_subdirectory(win-mf)
 	add_subdirectory(obs-qsv11)
 	add_subdirectory(vlc-video)
+		add_subdirectory(win-asio)
+<<<<<<< HEAD
 	if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/enc-amf/CMakeLists.txt")
 		add_subdirectory(enc-amf)
 	else()
