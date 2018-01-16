@@ -110,7 +110,7 @@ enum audio_format get_planar_format(audio_format format)
 
 int bytedepth_format(audio_format format)
 {
-	return get_audio_bytes_per_channel(format);
+	return (int)get_audio_bytes_per_channel(format);
 }
 
 int bytedepth_format(RtAudioFormat format) {
@@ -134,6 +134,7 @@ RtAudioFormat obs_to_rtasio_audio_format(audio_format format)
 
 	case AUDIO_FORMAT_FLOAT:
 	case AUDIO_FORMAT_FLOAT_PLANAR:
+	default:
 		return RTAUDIO_FLOAT32;
 	}
 	// default to 32 float samples for best quality
@@ -255,7 +256,6 @@ static bool fill_out_channels_modified(obs_properties_t *props, obs_property_t *
 static bool fill_out_sample_rates(obs_properties_t *props, obs_property_t *list, obs_data_t *settings) {
 	const char* device = obs_data_get_string(settings, "device_id");
 	RtAudio::DeviceInfo info;
-	unsigned int input_channels;
 
 	obs_property_list_clear(list);
 	//get the device info
@@ -276,7 +276,6 @@ static bool fill_out_sample_rates(obs_properties_t *props, obs_property_t *list,
 static bool fill_out_bit_depths(obs_properties_t *props, obs_property_t *list, obs_data_t *settings) {
 	const char* device = obs_data_get_string(settings, "device_id");
 	RtAudio::DeviceInfo info;
-	unsigned int input_channels;
 
 	//get the device info
 	info = get_device_info(device);
@@ -320,7 +319,7 @@ static bool asio_device_changed(obs_properties_t *props,
 	unsigned int recorded_channels = get_audio_channels(aoi.speakers);
 
 	obs_property_t *route[MAX_AUDIO_CHANNELS];
-	int pad_digits = floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
+	int pad_digits = (int)floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
 	const char* route_name_format = "route %i";
 	char* route_name = new char[strlen(route_name_format) + pad_digits];
 	for (unsigned int i = 0; i < recorded_channels; i++) {
@@ -370,10 +369,10 @@ int mix(uint8_t *inputBuffer, obs_source_audio *out, size_t bytes_per_ch, int ro
 	unsigned int recorded_channels = get_audio_channels(aoi.speakers);
 	short j = 0;
 	for (size_t i = 0; i < recorded_channels; i++) {
-		if (route[i] > -1 && route[i] < recorded_device_chs) {
+		if (route[i] > -1 && route[i] < (int)recorded_device_chs) {
 			out->data[j++] = inputBuffer + route[i] * bytes_per_ch;
 		}
-		else if (route[i] = -1) {
+		else if (route[i] == -1) {
 			uint8_t * silent_buffer;
 			silent_buffer = (uint8_t *)calloc(bytes_per_ch, 1);
 			out->data[j++] = silent_buffer;
@@ -384,9 +383,7 @@ int mix(uint8_t *inputBuffer, obs_source_audio *out, size_t bytes_per_ch, int ro
 
 int create_asio_buffer(void *outputBuffer, void *inputBuffer, unsigned int nBufferFrames,
 	double streamTime, RtAudioStreamStatus status, void *userData) {
-	unsigned int i;
 	asio_data *data = (asio_data *)userData;
-	int input_channels = data->channels;
 
 	int route[MAX_AUDIO_CHANNELS];
 	int recorded_channels = data->recorded_channels;
@@ -458,8 +455,6 @@ int create_asio_buffer(void *outputBuffer, void *inputBuffer, unsigned int nBuff
 
 void asio_init(struct asio_data *data)
 {
-	// number of channels which will be captured
-	int recorded_channels = data->recorded_channels;
 	// get info, useful for debug
 	RtAudio::DeviceInfo info = get_device_info(data->device);
 	data->info = info;
@@ -564,12 +559,9 @@ void asio_update(void *vptr, obs_data_t *settings)
 	struct asio_data *data = (asio_data *)vptr;
 	const char *device;
 	unsigned int rate;
-	speaker_layout ChannelFormat;
 	audio_format BitDepth;
 	uint16_t BufferSize;
 	unsigned int channels;
-	uint8_t FirstChannel;
-	uint8_t LastChannel;
 	RtAudio::DeviceInfo info;
 	bool reset = false;
 	int route[MAX_AUDIO_CHANNELS];
@@ -583,21 +575,16 @@ void asio_update(void *vptr, obs_data_t *settings)
 	// get device from settings
 	device = obs_data_get_string(settings, "device_id");
 
-	try {
-		if (device == NULL) {
-			reset = true;
-		} else if (data->device == NULL) {
+	if (device == NULL) {
+		reset = true;
+	} else if (data->device == NULL) {
+		data->device = bstrdup(device);
+		reset = true;
+	} else {
+		if (strcmp(device, data->device) != 0) {
 			data->device = bstrdup(device);
 			reset = true;
-		} else {
-			if (strcmp(device, data->device) != 0) {
-				data->device = bstrdup(device);
-				reset = true;
-			}
 		}
-	}
-	catch (...) {
-		blog(LOG_INFO, "Initializing asio device");
 	}
 
 	info = get_device_info(device);
@@ -622,7 +609,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 		reset = true;
 	}
 
-	BufferSize = obs_data_get_int(settings, "buffer");
+	BufferSize = (uint16_t)obs_data_get_int(settings, "buffer");
 	if (data->BufferSize != BufferSize) {
 		data->BufferSize = BufferSize;
 		reset = true;
@@ -670,12 +657,10 @@ obs_properties_t * asio_get_properties(void *unused)
 	obs_properties_t *props;
 	obs_property_t *devices;
 	obs_property_t *rate;
-	obs_property_t *first_channel;
-	obs_property_t *last_channel;
 	obs_property_t *bit_depth;
 	obs_property_t *buffer_size;
 	obs_property_t *route[MAX_AUDIO_CHANNELS];
-	int pad_digits = floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
+	int pad_digits = (int)floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
 
 	UNUSED_PARAMETER(unused);
 
