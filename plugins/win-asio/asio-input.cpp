@@ -347,8 +347,10 @@ static bool asio_device_changed(obs_properties_t *props,
 	const char *curDeviceId = obs_data_get_string(settings, "device_id");
 	obs_property_t *sample_rate = obs_properties_get(props, "sample rate");
 	obs_property_t *bit_depth = obs_properties_get(props, "bit depth");
-	// be sure to set device as current one
+	// get channel number from output speaker layout set by obs
+	DWORD recorded_channels = get_obs_output_channels();
 
+	// make sure to set device as current one
 	size_t itemCount = obs_property_list_item_count(list);
 	bool itemFound = false;
 
@@ -376,47 +378,30 @@ static bool asio_device_changed(obs_properties_t *props,
 			else if (BASS_ASIO_ErrorGetCode() == BASS_ERROR_DEVICE) {
 				blog(LOG_ERROR, "Device index is invalid\n");
 			}
-		}		
-	}
-	// get channel number from output speaker layout set by obs
-	DWORD recorded_channels = get_obs_output_channels();
+		}	
+		else {
+			obs_property_t *route[MAX_AUDIO_CHANNELS];
+			int pad_digits = (int)floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
+			const char* route_name_format = "route %i";
+			char* route_name = new char[strlen(route_name_format) + pad_digits];
+			if (itemFound) {
+				for (unsigned int i = 0; i < recorded_channels; i++) {
+					std::string name = "route " + std::to_string(i);
+					route[i] = obs_properties_get(props, name.c_str());
+					obs_property_list_clear(route[i]);
+					sprintf(route_name, route_name_format, i);
+					obs_data_set_default_int(settings, route_name, -1); // default is muted channels
+					obs_property_set_modified_callback(route[i], fill_out_channels_modified);
+				}
+			}
+			obs_property_list_clear(sample_rate);
+			obs_property_list_clear(bit_depth);
 
-	obs_property_t *route[MAX_AUDIO_CHANNELS];
-	int pad_digits = (int)floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
-	const char* route_name_format = "route %i";
-	char* route_name = new char[strlen(route_name_format) + pad_digits];
-	if (itemFound) {
-		for (unsigned int i = 0; i < recorded_channels; i++) {
-			std::string name = "route " + std::to_string(i);
-			route[i] = obs_properties_get(props, name.c_str());
-			obs_property_list_clear(route[i]);
-			sprintf(route_name, route_name_format, i);
-			obs_data_set_default_int(settings, route_name, -1); // default is muted channels
-			obs_property_set_modified_callback(route[i], fill_out_channels_modified);
+			obs_property_set_modified_callback(sample_rate, fill_out_sample_rates);
+			obs_property_set_modified_callback(bit_depth, fill_out_bit_depths);
 		}
 	}
-	obs_property_list_clear(sample_rate);
-	obs_property_list_clear(bit_depth);
 
-	obs_property_set_modified_callback(sample_rate, fill_out_sample_rates);
-	obs_property_set_modified_callback(bit_depth, fill_out_bit_depths);
-
-	return true;
-}
-
-int mix(uint8_t *inputBuffer, obs_source_audio *out, size_t bytes_per_ch, int route[], unsigned int recorded_device_chs = UINT_MAX) {
-	DWORD recorded_channels = get_obs_output_channels();
-	short j = 0;
-	for (size_t i = 0; i < recorded_channels; i++) {
-		if (route[i] > -1 && route[i] < (int)recorded_device_chs) {
-			out->data[j++] = inputBuffer + route[i] * bytes_per_ch;
-		}
-		else if (route[i] == -1) {
-			uint8_t * silent_buffer;
-			silent_buffer = (uint8_t *)calloc(bytes_per_ch, 1);
-			out->data[j++] = silent_buffer;
-		}
-	}
 	return true;
 }
 
@@ -479,8 +464,6 @@ DWORD CALLBACK create_asio_buffer(BOOL input, DWORD channel, void *buffer, DWORD
 			// no need to silent the mute channels since they're already calloc'ed to zero == silence
 		}
 	}
-
-	//mix(inputBuf, &out, bufSizePerChannelBytes, route, data->channels);
 
 	struct obs_source_audio out;
 	out.data[0] = outputBuf;
@@ -582,10 +565,6 @@ static void * asio_create(obs_data_t *settings, obs_source_t *source)
 	data->info = NULL;
 
 	asio_update(data, settings);
-
-	//if (obs_data_get_string(settings, "device_id")) {
-	//	asio_init(data);
-	//}
 
 	return data;
 }
@@ -722,8 +701,6 @@ void asio_update(void *vptr, obs_data_t *settings)
 		asio_init(data);
 	}
 
-
-
 }
 
 const char * asio_get_name(void *unused)
@@ -758,7 +735,7 @@ obs_properties_t * asio_get_properties(void *unused)
 	obs_property_set_modified_callback(devices, asio_device_changed);
 	fill_out_devices(devices);
 	std::string dev_descr = "ASIO devices.\n"
-			"OBS-Studio supports for now a single ASIO source.\n"
+			"A single ASIO source per device can be created.\n"
 			"But duplication of an ASIO source in different scenes is still possible";
 	obs_property_set_long_description(devices, dev_descr.c_str());
 	// get channel number from output speaker layout set by obs
