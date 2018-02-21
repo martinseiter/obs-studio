@@ -742,6 +742,16 @@ void asio_update(void *vptr, obs_data_t *settings)
 		inParam->suggestedLatency = 0;
 		inParam->hostApiSpecificStreamInfo = NULL;
 
+		bool canDo44 = false;
+		if (Pa_IsFormatSupported(inParam, NULL, 44100) == paFormatIsSupported)
+		{
+			canDo44 = true;
+		}
+		bool canDo48 = false;
+		if (Pa_IsFormatSupported(inParam, NULL, 48000) == paFormatIsSupported)
+		{
+			canDo48 = true;
+		}
 		/* Open an audio I/O stream. */
 		if (resetDevice) {
 			// close old stream
@@ -754,9 +764,9 @@ void asio_update(void *vptr, obs_data_t *settings)
 				blog(LOG_ERROR, "PortAudio error : %s\n", Pa_GetErrorText(err));
 			}
 		}
-		if (BitDepth != 0 && (rate == 44100 || rate == 48000) && BufferSize != 0) {
+		if (BitDepth != 0 && (rate == 44100 && canDo44 || rate == 48000 && canDo48) && BufferSize != 0) {
 			err = Pa_OpenStream(stream, inParam, NULL, data->SampleRate,
-				data->BufferSize, paNoFlag, create_asio_buffer, data);
+				2048, paClipOff, create_asio_buffer, data);
 			data->stream = stream; // update to new stream
 
 			if (err == paNoError) {
@@ -768,6 +778,18 @@ void asio_update(void *vptr, obs_data_t *settings)
 				else {
 					blog(LOG_ERROR, "Could not start the stream \n");
 					blog(LOG_ERROR, "PortAudio error : %s\n", Pa_GetErrorText(err));
+					// normally we should never reach that but some drivers can be buggy
+					if (err == paInvalidSampleRate) {
+						if (data->SampleRate == 44100 && canDo48) {
+							err = Pa_OpenStream(stream, inParam, NULL, 48000,
+								2048, paClipOff, create_asio_buffer, data);
+						}
+						else if (data->SampleRate == 48000 && canDo44) {
+							err = Pa_OpenStream(stream, inParam, NULL, 48000,
+								2048, paClipOff, create_asio_buffer, data);
+						}
+							
+					}
 				}
 			}
 			else {
