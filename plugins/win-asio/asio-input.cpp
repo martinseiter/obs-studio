@@ -29,6 +29,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <windows.h>
 #include "portaudio.h"
 #include "pa_asio.h"
+#include <QWidget>
+#include <QMainWindow>
+#include <QWindow>
+#include <QMessageBox>
+#include <QString>
+#include <QLabel>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("win-asio", "en-US")
@@ -78,9 +86,6 @@ struct asio_data {
 	int recorded_channels; // number of channels passed from device (including muted) to OBS; is at most 8
 	int route[MAX_AUDIO_CHANNELS]; // stores the channel re-ordering info
 };
-
-/* global RtAudio */
-//RtAudio adc;
 
 /* ======================================================================= */
 /* conversion between portaudio and obs */
@@ -199,7 +204,21 @@ size_t get_device_index(const char *device) {
 void asio_update(void *vptr, obs_data_t *settings);
 void asio_destroy(void *vptr);
 ///////////////////////////////
-
+static bool credits(obs_properties_t *props,
+	obs_property_t *property, void *data)
+{
+	QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
+	QMessageBox mybox(main_window);
+//	mybox->icon(QMessageBox::Information);
+	QString text = "(c) 2018, license GPL v3 or later:\r\n"
+		"Andersama <anderson.john.alexander@gmail.com>\r\n"
+		"pkv \r\n <pkv.stream@gmail.com>\r\n";
+	mybox.setText(text);
+	mybox.setIconPixmap(QPixmap(":/res/images/asiologo.png"));
+	mybox.setWindowTitle(QString("Credits: obs-asio"));
+	mybox.exec();
+	return true;
+}
 // call the control panel
 static bool DeviceControlPanel(obs_properties_t *props, 
 	obs_property_t *property, void *data) {
@@ -766,7 +785,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 		}
 		if (BitDepth != 0 && (rate == 44100 && canDo44 || rate == 48000 && canDo48) && BufferSize != 0) {
 			err = Pa_OpenStream(stream, inParam, NULL, data->SampleRate,
-				2048, paClipOff, create_asio_buffer, data);
+				1024, paClipOff, create_asio_buffer, data);
 			data->stream = stream; // update to new stream
 
 			if (err == paNoError) {
@@ -782,7 +801,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 					if (err == paInvalidSampleRate) {
 						if (data->SampleRate == 44100 && canDo48) {
 							err = Pa_OpenStream(stream, inParam, NULL, 48000,
-								2048, paClipOff, create_asio_buffer, data);
+								1024, paClipOff, create_asio_buffer, data);
 						}
 						else if (data->SampleRate == 48000 && canDo44) {
 							err = Pa_OpenStream(stream, inParam, NULL, 48000,
@@ -832,7 +851,7 @@ obs_properties_t * asio_get_properties(void *unused)
 	UNUSED_PARAMETER(unused);
 
 	props = obs_properties_create();
-//	obs_properties_set_flags(props, OBS_PROPERTIES_DEFER_UPDATE);
+	
 	devices = obs_properties_add_list(props, "device_id",
 			obs_module_text("Device"), OBS_COMBO_TYPE_LIST,
 			OBS_COMBO_FORMAT_STRING);
@@ -842,10 +861,8 @@ obs_properties_t * asio_get_properties(void *unused)
 			"OBS-Studio supports for now a single ASIO source.\n"
 			"But duplication of an ASIO source in different scenes is still possible";
 	obs_property_set_long_description(devices, dev_descr.c_str());
-	// get channel number from output speaker layout set by obs
-	struct obs_audio_info aoi;
-	obs_get_audio_info(&aoi);
-	unsigned int recorded_channels = get_audio_channels(aoi.speakers);
+
+	unsigned int recorded_channels = get_obs_output_channels();
 
 	std::string route_descr = "For each OBS output channel, pick one\n of the input channels of your ASIO device.\n";
 	const char* route_name_format = "route %i";
@@ -895,7 +912,12 @@ obs_properties_t * asio_get_properties(void *unused)
 		"for sample rate and buffer are consistent with what you\n"
 		"have set in OBS.";
 	obs_property_set_long_description(console, console_descr.c_str());
-
+	obs_property_t *button = obs_properties_add_button(props, "credits", "CREDITS", credits);
+	
+	//QLabel test;
+	//test.setText(QString("test"));
+	//QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
+	//test.setParent(main_window);
 	return props;
 }
 
