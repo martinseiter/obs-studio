@@ -399,7 +399,7 @@ static bool fill_out_buffer_sizes(obs_properties_t *props, obs_property_t *list,
 	obs_property_list_clear(list);
 
 	if (*gran == -1) {
-		size_t gran_buffer = *minBuf;
+		long long gran_buffer = *minBuf;
 		while (gran_buffer <= *maxBuf) {
 			int n = snprintf(NULL, 0, "%llu%s", gran_buffer, (gran_buffer == *BufPref ? " (preferred)" : ""));
 			if (n <= 0) {
