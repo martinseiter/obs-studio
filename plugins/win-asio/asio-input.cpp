@@ -338,7 +338,7 @@ bool canSamplerate(int device_index, int sample_rate) {
 static bool fill_out_sample_rates(obs_properties_t *props, obs_property_t *list, obs_data_t *settings) {
 	const char* device = obs_data_get_string(settings, "device_id");
 	const   PaDeviceInfo *deviceInfo = new PaDeviceInfo;
-	bool ret;
+	bool ret44, ret48;
 	std::string rate;
 
 	obs_property_list_clear(list);
@@ -347,21 +347,25 @@ static bool fill_out_sample_rates(obs_properties_t *props, obs_property_t *list,
 	//get the device info
 	deviceInfo = Pa_GetDeviceInfo(index);
 
-	//ret = canSamplerate(index, 44100);
-	//if (ret) {
-	//	rate = std::to_string(44100) + " Hz";
-	//	obs_property_list_add_int(list, rate.c_str(), 44100);
-	//}
-	//ret = canSamplerate(index, 48000);
-	//if (ret) {
-	//	rate = std::to_string(48000) + " Hz";
-	//	obs_property_list_add_int(list, rate.c_str(), 48000);
-	//}
+	ret44 = canSamplerate(index, 44100);
+	if (ret44) {
+		rate = std::to_string(44100) + " Hz";
+		obs_property_list_add_int(list, rate.c_str(), 44100);
+	}
+	ret48 = canSamplerate(index, 48000);
+	if (ret48) {
+		rate = std::to_string(48000) + " Hz";
+		obs_property_list_add_int(list, rate.c_str(), 48000);
+	}
+	if (!ret44 && !ret48) {
+		blog(LOG_ERROR, "Obs only supports 44100 and 48000 Hz.\n"
+				"Change the smaple rate of your device.\n");
+	}
 	// rearoute samplerate is not probed correctly so ...
-	rate = std::to_string(44100) + " Hz";
+	/*rate = std::to_string(44100) + " Hz";
 	obs_property_list_add_int(list, rate.c_str(), 44100);
 	rate = std::to_string(48000) + " Hz";
-	obs_property_list_add_int(list, rate.c_str(), 48000);
+	obs_property_list_add_int(list, rate.c_str(), 48000);*/
 	return true;
 }
 
@@ -682,7 +686,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 {
 	struct asio_data *data = (asio_data *)vptr;
 	const char *device;
-	unsigned int rate;
+	unsigned int rate, streamRate;
 	audio_format BitDepth;
 	uint16_t BufferSize;
 	unsigned int channels;
@@ -734,6 +738,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 		rate = (int)obs_data_get_int(settings, "sample rate");
 		if (data->SampleRate != (int)rate) {
 			data->SampleRate = (int)rate;
+
 			reset = true;
 		}
 
@@ -783,8 +788,21 @@ void asio_update(void *vptr, obs_data_t *settings)
 				blog(LOG_ERROR, "PortAudio error : %s\n", Pa_GetErrorText(err));
 			}
 		}
-		if (BitDepth != 0 && (rate == 44100 && canDo44 || rate == 48000 && canDo48) && BufferSize != 0) {
-			err = Pa_OpenStream(stream, inParam, NULL, data->SampleRate,
+		if (!canDo44 && !canDo48) {
+			blog(LOG_ERROR, "Device error: not supporting 44100 or 48000 Hz sample rate\n"
+				"or not set at either rates.\n"
+				"Obs only supports 44100 and 48000 Hz.\n");
+		} else if (BitDepth != 0  && BufferSize != 0) {
+			if (rate == 44100 && canDo44 || rate == 48000 && canDo48) {
+				streamRate = data->SampleRate;
+			}
+			else if (rate == 44100 && !canDo44 && canDo48) {
+				streamRate = 48000;
+			}
+			else if (rate == 48000 && !canDo48 && canDo44) {
+				streamRate = 44100;
+			}
+			err = Pa_OpenStream(stream, inParam, NULL, streamRate,
 				1024, paClipOff, create_asio_buffer, data);
 			data->stream = stream; // update to new stream
 
@@ -805,7 +823,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 						}
 						else if (data->SampleRate == 48000 && canDo44) {
 							err = Pa_OpenStream(stream, inParam, NULL, 48000,
-								2048, paClipOff, create_asio_buffer, data);
+								1024, paClipOff, create_asio_buffer, data);
 						}
 							
 					}
