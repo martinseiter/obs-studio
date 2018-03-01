@@ -20,6 +20,7 @@ set(win-asio-sdk_HEADERS
 	)
 
 set(win-asio_HEADERS
+	circle-buffer.h
 	)
 
 set(win-asio_SOURCES

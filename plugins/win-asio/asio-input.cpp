@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string>
 #include <windows.h>
+#include "circle-buffer.h"
 #include "portaudio.h"
 #include "pa_asio.h"
 #include <QWidget>
@@ -68,7 +69,7 @@ PaAsioDeviceInfo;
 struct asio_data {
 	obs_source_t *source;
 
-	/*asio device and info */
+	//asio device and info
 	const char *device;
 	uint8_t device_index;
 	PaAsioDeviceInfo *info;
@@ -80,7 +81,7 @@ struct asio_data {
 	uint16_t BufferSize;     // number of samples in buffer
 	uint64_t first_ts;       //first timestamp
 
-	/* channels info */
+	//channels info
 	int channels; //total number of input channels
 	int output_channels; // number of output channels of device (not used)
 	int recorded_channels; // number of channels passed from device (including muted) to OBS; is at most 8
