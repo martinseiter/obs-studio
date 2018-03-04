@@ -98,7 +98,7 @@ public:
 	~asio_listener() {
 		DeleteCriticalSection(&settings_mutex);
 		if (silent_buffer) {
-			free(silent_buffer);
+			bfree(silent_buffer);
 		}
 	}
 
