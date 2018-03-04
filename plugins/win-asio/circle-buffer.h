@@ -275,6 +275,7 @@ public:
 	}
 
 	device_buffer() {
+		listener_count = 0;
 		all_prepped = false;
 		buffer_prepped = false;
 		circle_buffer_prepped = false;
@@ -291,6 +292,7 @@ public:
 	}
 
 	device_buffer(size_t buffers, audio_format audioformat) {
+		listener_count = 0;
 		all_prepped = false;
 		buffer_prepped = false;
 		circle_buffer_prepped = false;
@@ -332,6 +334,7 @@ public:
 		if (!circle_buffer_prepped) {
 			//create a buffer w/ a minimum of 4 slots and a target of a fraction of 2048 samples
 			buffer_count = max(4, ceil(2048 / bufpref));
+			device_options.buffer_size = bufpref;
 			circlebuf_init(&audio_buffer);
 			circlebuf_reserve(&audio_buffer, buffer_count * sizeof(device_source_audio));
 			for (int i = 0; i < buffer_count; i++) {
@@ -348,6 +351,7 @@ public:
 
 	void prep_events(long input_chs) {
 		if (!events_prepped) {
+			device_options.channel_count = input_chs;
 			receive_signals = (WinHandle*)calloc(input_chs, sizeof(WinHandle));
 			for (int i = 0; i < input_chs; i++) {
 				receive_signals[i] = CreateEvent(nullptr, true, false, nullptr);
@@ -391,7 +395,9 @@ public:
 		prep_events(in_chs);
 		if (circle_buffer_prepped && (!buffer_prepped || reallocate_buffer)) {
 			this->frames = frames;
+			device_options.buffer_size = frames;
 			this->input_chs = in_chs;
+			device_options.channel_count = in_chs;
 			this->format = format;
 			this->samples_per_sec = samples_per_sec;
 			this->buffer_size = frames * bytedepth_format(format);

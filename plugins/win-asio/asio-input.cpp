@@ -531,10 +531,13 @@ static bool asio_device_changed(obs_properties_t *props,
 int create_asio_buffer(const void *inputBuffer, void *outputBuffer, unsigned long framesCount,
 	const PaStreamCallbackTimeInfo* timeInfo, PaStreamCallbackFlags statusFlags,
 	void *userData) {
+	//(uint64_t)(timeInfo->inputBufferAdcTime * NSEC_PER_SEC)
 	//timeInfo->currentTime
 	//timeInfo->inputBufferAdcTime
+	uint64_t ts = os_gettime_ns();
 	device_buffer *device = (device_buffer*)userData;
-	device->write_buffer_interleaved(inputBuffer, device->get_input_channels() * framesCount * bytedepth_format(device->get_format()), (uint64_t)(timeInfo->inputBufferAdcTime * NSEC_PER_SEC));
+	size_t buf_size = device->get_input_channels() * framesCount * bytedepth_format(device->get_format());
+	device->write_buffer_interleaved(inputBuffer, buf_size, ts);
 
 	return paContinue;
 	/*
@@ -760,6 +763,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 	}
 	if (device != NULL && device[0] != '\0') {
 		device_index = get_device_index(device);
+		listener->device_index = device_index;
 		deviceInfo = Pa_GetDeviceInfo(device_index);	
 
 		for (int i = 0; i < recorded_channels; i++) {
@@ -795,6 +799,9 @@ void asio_update(void *vptr, obs_data_t *settings)
 			reset = true;
 		}
 		*/
+
+		listener->muted_chs = listener->_get_muted_chs(listener->route);
+		listener->unmuted_chs = listener->_get_unmuted_chs(listener->route);
 
 		listener->input_channels = deviceInfo->maxInputChannels;
 		listener->output_channels = deviceInfo->maxOutputChannels;
@@ -853,8 +860,20 @@ void asio_update(void *vptr, obs_data_t *settings)
 				
 			}
 			else {
+				long min_buf;
+				long max_buf;
+				long pref_buf;
+				long gran;
+				PaAsio_GetAvailableBufferSizes(device_index, &min_buf, &max_buf, &pref_buf, &gran);
+				//user_data->info;
+				//user_data->settings;
+				//user_data->stream;
+				device->prep_circle_buffer(pref_buf);
+				device->prep_events(deviceInfo->maxInputChannels);
+				device->prep_buffers(pref_buf, deviceInfo->maxInputChannels, BitDepth, streamRate);
+
 				err = Pa_OpenStream(stream, inParam, NULL, streamRate,
-					1024, paClipOff, create_asio_buffer, device);
+					pref_buf, paClipOff, create_asio_buffer, device);
 				//data->stream = stream; // update to new stream
 
 				if (err == paNoError) {
@@ -870,11 +889,11 @@ void asio_update(void *vptr, obs_data_t *settings)
 						if (err == paInvalidSampleRate) {
 							if (rate == 44100 && canDo48) {
 								err = Pa_OpenStream(stream, inParam, NULL, 48000,
-									1024, paClipOff, create_asio_buffer, device);
+									pref_buf, paClipOff, create_asio_buffer, device);
 							}
 							else if (rate == 48000 && canDo44) {
 								err = Pa_OpenStream(stream, inParam, NULL, 44100,
-									1024, paClipOff, create_asio_buffer, device);
+									pref_buf, paClipOff, create_asio_buffer, device);
 							}
 
 						}
@@ -1026,6 +1045,9 @@ bool obs_module_load(void)
 			blog(LOG_INFO, "device %i = %s could not be added: driver issue.\n", i, deviceInfo->name);
 		}
 		device_buffer *device = new device_buffer();
+		device->device_index = i;
+		device->device_options.name = bstrdup(deviceInfo->name);
+		device->device_options.channel_count = deviceInfo->maxInputChannels;
 		device_list.push_back(device);
 	}
 
