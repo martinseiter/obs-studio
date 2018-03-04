@@ -8,6 +8,10 @@
 
 #define CAPTURE_INTERVAL INFINITE
 #define NSEC_PER_SEC  1000000000LL
+
+extern int bytedepth_format(audio_format format);
+extern enum audio_format get_planar_format(audio_format format);
+
 //BASS_ASIO_DEVICEINFO
 struct device_buffer_options {
 	uint32_t buffer_size;
@@ -35,6 +39,7 @@ class asio_listener {
 private:
 	uint8_t* silent_buffer = NULL;
 	size_t silent_buffer_size = 0;
+	void* user_data;
 public:
 	CRITICAL_SECTION settings_mutex;
 
@@ -65,6 +70,14 @@ public:
 	bool reconnecting = false;
 	bool previouslyFailed = false;
 	bool useDeviceTiming = false;
+
+	void* get_user_data() {
+		return user_data;
+	}
+
+	void set_user_data(void* data) {
+		user_data = data;
+	}
 
 	const char* get_id() {
 		const char * format_id = "0x%x";
@@ -213,8 +226,28 @@ private:
 	bool events_prepped = false;
 
 	circlebuf audio_buffer;
+
+	void* user_data;
+
+	uint32_t listener_count;
 public:
 	uint32_t samples_per_sec;
+
+	audio_format get_format() {
+		return format;
+	}
+
+	uint32_t get_listener_count() {
+		return listener_count;
+	}
+
+	void* get_user_data() {
+		return user_data;
+	}
+
+	void set_user_data(void* data) {
+		user_data = data;
+	}
 
 	const WinHandle * get_handles() {
 		return receive_signals;
@@ -285,6 +318,10 @@ public:
 		else {
 			all_prepped = false;
 		}
+	}
+
+	bool device_buffer_preppared() {
+		return all_prepped;
 	}
 
 	void prep_circle_buffer(device_buffer_options &options) {
@@ -392,7 +429,7 @@ public:
 		check_all();
 	}
 
-	void write_buffer_interleaved(void* buffer, DWORD BufSize, uint64_t timestamp_on_callback) {
+	void write_buffer_interleaved(const void* buffer, DWORD BufSize, uint64_t timestamp_on_callback) {
 		if (!all_prepped) {
 			blog(LOG_INFO, "%s device %i is not prepared", __FUNCTION__, device_index);
 			return;
@@ -461,6 +498,7 @@ public:
 		}
 
 		source->isASIOActive = true;
+		device->listener_count++;
 		ResetEvent(source->stop_listening_signal);
 
 		blog(LOG_INFO, "listener for device %lu created: source: %s", device->device_index, source->get_id());
@@ -484,11 +522,13 @@ public:
 				if (source->device_index != device->device_index) {
 					blog(LOG_INFO, "source device index %lu is not device index %lu", source->device_index, device->device_index);
 					blog(LOG_INFO, "%s closing", thread_name.c_str());
+					device->listener_count--;
 					return 0;
 				}
 				else if (!source->isASIOActive) {
 					blog(LOG_INFO, "%s indicated it wanted to disconnect", source->get_id());
 					blog(LOG_INFO, "%s closing", thread_name.c_str());
+					device->listener_count--;
 					return 0;
 				}
 				//uint64_t t_stamp = os_gettime_ns();
@@ -500,46 +540,55 @@ public:
 			else if (waitResult == WAIT_OBJECT_0 + 1) {
 				blog(LOG_INFO, "device %l indicated it wanted to disconnect", device->device_index);
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else if (waitResult == WAIT_OBJECT_0 + 2) {
 				blog(LOG_INFO, "%s indicated it wanted to disconnect", source->get_id());
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else if (waitResult == WAIT_ABANDONED_0) {
 				blog(LOG_INFO, "a mutex for %s was abandoned while listening to", thread_name.c_str(), device->device_index);
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else if (waitResult == WAIT_ABANDONED_0 + 1) {
 				blog(LOG_INFO, "a mutex for %s was abandoned while listening to", thread_name.c_str(), device->device_index);
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else if (waitResult == WAIT_ABANDONED_0 + 2) {
 				blog(LOG_INFO, "a mutex for %s was abandoned while listening to", thread_name.c_str(), device->device_index);
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else if (waitResult == WAIT_TIMEOUT) {
 				blog(LOG_INFO, "%s timed out while listening to %l", thread_name.c_str(), device->device_index);
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else if (waitResult == WAIT_FAILED) {
 				blog(LOG_INFO, "listener thread wait %lu failed with 0x%x", device->device_index, GetLastError());
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 			else {
 				blog(LOG_INFO, "unexpected wait result = %i", waitResult);
 				blog(LOG_INFO, "%s closing", thread_name.c_str());
+				device->listener_count--;
 				return 0;
 			}
 
 		}
 
+		device->listener_count--;
 		return 0;
 	}
 
@@ -559,5 +608,22 @@ public:
 		listener->captureThread = CreateThread(nullptr, 0, this->capture_thread, parameters, 0, nullptr);
 	}
 };
+
+//utility function
+void add_listener_to_device(asio_listener *listener, device_buffer *buffer) {
+	if (!buffer->device_buffer_preppared()) {
+		return;
+	}
+	listener_pair* parameters = new listener_pair();
+
+	parameters->asio_listener = listener;
+	parameters->device = buffer;
+	blog(LOG_INFO, "disconnecting any previous connections (source_id: %s)", listener->get_id());
+	listener->disconnect();
+	//CloseHandle(listener->captureThread);
+	blog(LOG_INFO, "adding listener for %lu (source: %lu)", buffer->device_index, listener->device_index);
+	listener->captureThread = CreateThread(nullptr, 0, buffer->capture_thread, parameters, 0, nullptr);
+
+}
 
 std::vector<device_buffer*> device_list;
