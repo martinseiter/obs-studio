@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string>
 #include <windows.h>
+#include "gui/asioselector.h"
 #include "circle-buffer.h"
 #include "portaudio.h"
 #include "pa_asio.h"
@@ -54,6 +55,7 @@ OBS_MODULE_USE_DEFAULT_LOCALE("win-asio", "en-US")
 #define TEXT_BUFFER_1024_SAMPLES        obs_module_text("1024_samples")
 #define TEXT_BITDEPTH                   obs_module_text("BitDepth")
 
+AsioSelector *asioselector = NULL;
 
 typedef struct PaAsioDeviceInfo
 {
@@ -227,6 +229,61 @@ static bool credits(obs_properties_t *props,
 	mybox.exec();
 	return true;
 }
+
+void asio_selector_init() {
+	if (asioselector == NULL) {
+		asioselector = new AsioSelector();
+		const PaDeviceInfo *deviceInfo = new PaDeviceInfo;
+		size_t numOfDevices = getDeviceCount();
+		long minBuf;
+		long maxBuf;
+		long BufPref;
+		long gran;
+		std::vector<double> sample_rates = { 44100, 48000 };
+		std::vector<std::string> audio_formats = { "16 Bit Int", "32 Bit Int", "32 Bit Float" };
+		for (size_t i = 0; i < numOfDevices; i++) {
+			deviceInfo = Pa_GetDeviceInfo(i);
+			PaError err;
+			err = PaAsio_GetAvailableBufferSizes(i, &minBuf, &maxBuf, &BufPref, &gran);
+			std::vector<uint64_t> buffer_sizes;
+
+			if (gran == -1) {
+				uint64_t gran_buffer = minBuf;
+				while (gran_buffer <= maxBuf) {
+					buffer_sizes.push_back(gran_buffer);
+					gran_buffer *= 2;
+				}
+			}
+			else if (gran == 0) {
+				size_t gran_buffer = minBuf;
+				buffer_sizes.push_back(gran_buffer);
+			}
+			else if (gran > 0) {
+				size_t gran_buffer = minBuf;
+				while (gran_buffer <= maxBuf) {
+					buffer_sizes.push_back(gran_buffer);
+					gran_buffer += gran;
+				}
+			}
+
+			asioselector->addDevice(std::string(deviceInfo->name), sample_rates, buffer_sizes, audio_formats);
+		}
+		asioselector->setActiveDeviceUnique(true);
+	}
+}
+
+static bool asio_selector(obs_properties_t *props,
+	obs_property_t *property, void *data) {
+	QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
+	//QDialog dialog(main_window);
+	//static AsioSelector w;
+	asio_selector_init();
+	asioselector->show();
+	
+	return true;
+	//return dialog.exec();
+}
+
 // call the control panel
 static bool DeviceControlPanel(obs_properties_t *props, 
 	obs_property_t *property, void *data) {
@@ -1004,6 +1061,8 @@ obs_properties_t * asio_get_properties(void *unused)
 	obs_property_set_long_description(console, console_descr.c_str());
 	obs_property_t *button = obs_properties_add_button(props, "credits", "CREDITS", credits);
 	
+	obs_property_t *gui = obs_properties_add_button(props, "asio gui", "main device", asio_selector);
+
 	//QLabel test;
 	//test.setText(QString("test"));
 	//QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
