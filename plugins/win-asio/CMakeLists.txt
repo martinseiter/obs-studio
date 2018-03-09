@@ -20,10 +20,12 @@ set(win-asio-sdk_HEADERS
 	)
 
 set(win-asio_HEADERS
+	gui/asioselector.h
 	circle-buffer.h
 	)
 
 set(win-asio_SOURCES
+	gui/asioselector.cpp
 	asio-input.cpp
 )
 set(win-asio_QRC
