@@ -121,6 +121,7 @@ void AsioSelector::on_okButton_clicked()
         this->_use_device_timing[selected_device] = ui->deviceTiming->isChecked();
         this->_use_minimal_latency[selected_device] = ui->lowestLatency->isChecked();
     }
+    ui->actionSave->trigger();
     this->close();
 }
 
@@ -152,6 +153,7 @@ void AsioSelector::on_applyButton_clicked()
         this->_use_device_timing[selected_device] = ui->deviceTiming->isChecked();
         this->_use_minimal_latency[selected_device] = ui->lowestLatency->isChecked();
     }
+    ui->actionSave->trigger();
 }
 
 void AsioSelector::on_defaultsButton_clicked()
@@ -217,4 +219,43 @@ std::vector<uint32_t> AsioSelector::getActiveDevices(){
     }
     ret.shrink_to_fit();
     return ret;
+}
+
+void AsioSelector::on_actionSave_As_triggered()
+{
+    /*
+    QFileDialog *pFile = new QFileDialog ( this, "Save Settings", "default", ".json" );
+    pFile->setAcceptMode( QFileDialog::AcceptSave );
+    pFile->setWindowModality( Qt::WindowModal );
+    //QString filename = pFile->getSaveFileName();
+    int statusCode = pFile->exec();
+    */
+    if(this->save_as_callback != NULL)
+        this->save_as_callback(this);
+}
+
+void AsioSelector::set_save_visibility(bool visible){
+    ui->actionSave->setVisible(visible);
+    //ui->actionSave->setDisabled(visible);
+}
+
+void AsioSelector::set_save_as_visibility(bool visible){
+    ui->actionSave_As->setVisible(visible);
+    //ui->actionSave_As->setDisabled(visible);
+}
+
+void AsioSelector::set_load_visibility(bool visible){
+    ui->actionLoad->setVisible(visible);
+    //ui->actionLoad->setDisabled(visible);
+}
+
+void AsioSelector::on_actionSave_triggered()
+{
+    if(this->save_callback != NULL)
+        this->save_callback(this);
+}
+
+void AsioSelector::on_actionLoad_triggered()
+{
+
 }

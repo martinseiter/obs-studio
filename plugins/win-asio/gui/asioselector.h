@@ -1,6 +1,8 @@
 #ifndef ASIOSELECTOR_H
 #define ASIOSELECTOR_H
 
+#include <QFileDialog>
+#include <QDialog>
 #include <QVariant>
 #include <QListWidget>
 #include <QListWidgetItem>
@@ -79,6 +81,24 @@ public:
         return audio_format_list[index];
     }
 
+    void setSaveCallback( void(*save_cb)(AsioSelector*) ){
+        this->save_callback = save_cb;
+    }
+
+    void setSaveAsCallback( void(*save_as_cb)(AsioSelector*) ){
+        this->save_as_callback = save_as_cb;
+    }
+
+    void setLoadCallback( void(*load_cb)(AsioSelector*) ){
+        this->load_callback = load_cb;
+    }
+
+    void set_save_visibility(bool visible);
+
+    void set_save_as_visibility(bool visible);
+
+    void set_load_visibility(bool visible);
+
     void addDevice(std::string device_name, std::vector<double> sample_rates, std::vector<uint64_t> buffer_sizes, std::vector<std::string> audio_formats);
 
     void addDevice(std::string device_name, std::vector<double> sample_rates, double default_sample_rate,
@@ -92,6 +112,12 @@ private slots:
     void on_defaultsButton_clicked();
 
     void on_asioDevicesList_currentRowChanged(int currentRow);
+
+    void on_actionSave_As_triggered();
+
+    void on_actionSave_triggered();
+
+    void on_actionLoad_triggered();
 
 private:
     //QWidgetList* asioDevicesList;
@@ -118,6 +144,10 @@ private:
     uint32_t selected_device = -1;
 
     bool unique_active_device = false;
+
+    void (*save_callback)(AsioSelector*);
+    void (*save_as_callback)(AsioSelector*);
+    void (*load_callback)(AsioSelector*);
 
     Ui::AsioSelector *ui;
 };
