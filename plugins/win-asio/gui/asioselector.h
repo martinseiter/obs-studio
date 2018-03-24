@@ -77,6 +77,18 @@ public:
 		return current_buffer_size[index];
 	}
 
+	void setDefaultSampleRateForDevice(uint32_t index, double sample_rate) {
+		this->default_sample_rate[index] = sample_rate;
+	}
+
+	void setDefaultBufferSizeForDevice(uint32_t index, uint64_t buffer_size) {
+		this->default_buffer_size[index] = buffer_size;
+	}
+
+	void setDefaultAudioFormatForDevice(uint32_t index, std::string audio_format) {
+		this->default_audio_format[index] = audio_format;
+	}
+
 	std::string getAudioFormatForDevice(uint32_t index) {
 		return current_audio_format[index];
 	}
@@ -103,6 +115,22 @@ public:
 
 	bool getUseMinimalLatency(uint32_t index) {
 		return _use_minimal_latency[index];
+	}
+
+	void setIsActiveDevice(uint32_t index, bool active) {
+		this->_device_active[index] = active;
+	}
+
+	void setUseOptimalFormat(uint32_t index, bool use_optimal_format) {
+		this->_use_optimal_format[index] = use_optimal_format;
+	}
+
+	void setUseDeviceTiming(uint32_t index, bool use_device_timing) {
+		this->_use_device_timing[index] = use_device_timing;
+	}
+
+	void setUseMinimalLatency(uint32_t index, bool use_minimal_latency) {
+		this->_use_minimal_latency[index] = use_minimal_latency;
 	}
 
 	std::string getDeviceName(uint32_t index);

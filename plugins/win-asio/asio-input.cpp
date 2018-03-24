@@ -336,11 +336,50 @@ void load_asio_gui(AsioSelector* selector, AsioSelectorData* old_selector_data) 
 	sprintf(file_path, path_format, scene_data_path);
 
 	obs_data_t *device_settings = obs_data_create_from_json_file_safe(file_path, "bak");
-
+	obs_data_array_t *devices = obs_data_get_array(device_settings, "settings");
 	/*todo: fill in gui*/
+	size_t count = obs_data_array_count(devices);
+	size_t gui_count = selector->getNumberOfDevices();
+	size_t j = 0;
+	size_t last_found_index = 0;
+	for (size_t i = 0; i < gui_count; i++) {
+		obs_data_t *item;
+		for (j = last_found_index+1; j < count; j++) {
+			item = obs_data_array_item(devices, j);
+			std::string file_device_name = std::string(obs_data_get_string(item, "device_name"));
+			if (file_device_name == selector->getDeviceName(i)) {
+				last_found_index = j;
+				break;
+			}
+			obs_data_release(item);
+		}
+		if (j < count) {
+
+		}
+		else {
+			continue;
+		}
+
+		selector->setSampleRateForDevice(i, (double)obs_data_get_double(item,"current_sample_rate"));
+		selector->setBufferSizeForDevice(i, (uint64_t)obs_data_get_int(item, "current_buffer_size"));
+		selector->setAudioFormatForDevice(i, std::string(obs_data_get_string(item, "current_audio_format")));
+
+		selector->setDefaultSampleRateForDevice(i, (double)obs_data_get_double(item, "default_sample_rate"));
+		selector->setDefaultBufferSizeForDevice(i, (uint64_t)obs_data_get_int(item, "default_buffer_size"));
+		selector->setDefaultAudioFormatForDevice(i, std::string(obs_data_get_string(item, "default_audio_format")));
+
+		selector->setIsActiveDevice(i, (bool)obs_data_get_bool(item, "_device_active"));
+		selector->setUseMinimalLatency(i, (bool)obs_data_get_bool(item, "_use_minimal_latency"));
+		selector->setUseDeviceTiming(i, (bool)obs_data_get_bool(item, "_use_device_timing"));
+		selector->setUseOptimalFormat(i, (bool)obs_data_get_bool(item, "_use_optimal_format"));
+
+		obs_data_release(item);
+	}
 
 	//don't memory leak
 	free(file_path);
+	obs_data_release(device_settings);
+	obs_data_array_release(devices);
 
 	//store settings in gui
 	activate_asio_device();
@@ -357,8 +396,10 @@ void load_asio_device() {
 	sprintf(file_path, path_format, scene_data_path);
 
 	obs_data_t *device_settings = obs_data_create_from_json_file_safe(file_path, "bak");
+	obs_data_array_t *devices = obs_data_get_array(device_settings, "settings");
 
 	//don't memory leak
+
 	free(file_path);
 
 	//store settings in gui
@@ -537,6 +578,8 @@ void asio_selector_init() {
 			asioselector->addDevice(std::string(deviceInfo->name), sample_rates, buffer_sizes, audio_formats);
 		}
 		asioselector->setActiveDeviceUnique(true);
+		asioselector->setSaveCallback(save_asio_device);
+
 	}
 }
 
