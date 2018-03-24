@@ -284,6 +284,25 @@ void save_asio_device(AsioSelector *selector) {
 	activate_asio_device();
 }
 
+PaSampleFormat string_to_portaudio_audio_format(std::string format)
+{
+	const char * name = "16 Bit Int";
+	if (strcmp(format.c_str(), name) == 0) {
+		return paInt16;
+	}
+	name = "32 Bit Int";
+	if (strcmp(format.c_str(), name) == 0) {
+		return paInt32;
+	}
+	name = "32 Bit Float";
+	if (strcmp(format.c_str(), name) == 0) {
+		return paFloat32;
+	}
+	// default to 32 float samples for best quality
+	blog(LOG_ERROR, "string error for audio format; defaulting to float");
+	return paFloat32;
+}
+
 void activate_asio_device() {
 	double sample_rate = 0;
 	uint32_t buffer_size = 0;
@@ -292,8 +311,12 @@ void activate_asio_device() {
 	bool use_optimal_format = false;
 	bool use_device_timing = false;
 	bool use_minimal_latency = false;
+	const PaDeviceInfo *deviceInfo = new PaDeviceInfo;
+	PaStreamParameters *inParam = new PaStreamParameters();
 
 	std::vector<uint32_t> active_devices = asioselector->getActiveDevices();
+	int device_index = active_devices[0];
+	deviceInfo = Pa_GetDeviceInfo(device_index);
 
 	if (active_devices.size() > 0) {
 		sample_rate = asioselector->getSampleRateForDevice(active_devices[0]);
@@ -304,6 +327,14 @@ void activate_asio_device() {
 		use_device_timing = asioselector->getUseDeviceTiming(active_devices[0]);
 		use_minimal_latency = asioselector->getUseMinimalLatency(active_devices[0]);
 	}
+	/* stream parameters */
+
+	inParam->channelCount = deviceInfo->maxInputChannels;//data->channels;
+	inParam->device = device_index;//data->device_index;
+	inParam->sampleFormat = string_to_portaudio_audio_format(data_format);
+	inParam->suggestedLatency = 0;
+	inParam->hostApiSpecificStreamInfo = NULL;
+
 	/*
 	if (use_optimal_format) {
 		//Todo: change between optimal formats
@@ -529,7 +560,7 @@ static bool credits(obs_properties_t *props,
 	QMainWindow* main_window = (QMainWindow*)obs_frontend_get_main_window();
 	QMessageBox mybox(main_window);
 //	mybox->icon(QMessageBox::Information);
-	QString text = "(c) 2018, license GPL v3 or later:\r\n"
+	QString text = "(c) 2018, license GPL v2 or later:\r\n"
 		"Andersama <anderson.john.alexander@gmail.com>\r\n"
 		"pkv \r\n <pkv.stream@gmail.com>\r\n";
 	mybox.setText(text);
@@ -605,7 +636,12 @@ static bool DeviceControlPanel(obs_properties_t *props,
 
 	HWND asio_main_hwnd = (HWND)obs_frontend_get_main_window_handle();
 	// stop the stream
-	if (Pa_IsStreamActive(paasiodata->stream)){
+	err = Pa_IsStreamActive(paasiodata->stream);
+	if (err == 1) {
+		err = Pa_CloseStream(paasiodata->stream);
+		if (err != paNoError) {
+			blog(LOG_ERROR, "PortAudio error : %s\n", Pa_GetErrorText(err));	
+		}
 		err = Pa_Terminate();
 		if (err != paNoError) {
 			blog(LOG_ERROR, "PortAudio error : %s\n", Pa_GetErrorText(err));
@@ -707,7 +743,7 @@ bool canSamplerate(int device_index, int sample_rate) {
 	outputParameters.suggestedLatency = deviceInfo->defaultLowOutputLatency;
 	outputParameters.hostApiSpecificStreamInfo = NULL; 
 
-	err = Pa_IsFormatSupported(&inputParameters, &outputParameters, sample_rate);
+	err = Pa_IsFormatSupported(&inputParameters, &outputParameters, (double)sample_rate);
 	return (err == paFormatIsSupported) ? true : false;
 
 }
@@ -1043,6 +1079,8 @@ static void * asio_create(obs_data_t *settings, obs_source_t *source)
 	user_data->stream = NULL;
 	data->set_user_data(user_data);
 
+//	load_asio_gui(asioselector, NULL);
+
 	// check that we're accessing only asio devices
 	//assert(Pa_GetHostApiInfo(Pa_GetDeviceInfo(Pa_GetDefaultOutputDevice())->hostApi)->type == paASIO);
 	PaError err = Pa_Initialize();
@@ -1092,6 +1130,7 @@ void asio_update(void *vptr, obs_data_t *settings)
 	uint16_t BufferSize;
 	unsigned int channels;
 	const PaDeviceInfo *deviceInfo = new PaDeviceInfo;
+	PaAsioDeviceInfo *asioInfo = new PaAsioDeviceInfo;
 	int res, device_index;
 	bool reset = false;
 	bool resetDevice = false;
@@ -1222,9 +1261,9 @@ void asio_update(void *vptr, obs_data_t *settings)
 			else if (rate == 48000 && !canDo48 && canDo44) {
 				streamRate = 44100;
 			}
-			device_buffer * device = device_list[device_index];
+			device_buffer * devicebuf = device_list[device_index];
 			listener->disconnect();
-			if (device->get_listener_count() > 0) {
+			if (devicebuf->get_listener_count() > 0) {
 				
 			}
 			else {
@@ -1236,13 +1275,21 @@ void asio_update(void *vptr, obs_data_t *settings)
 				//user_data->info;
 				//user_data->settings;
 				//user_data->stream;
-				device->prep_circle_buffer(pref_buf);
-				device->prep_events(deviceInfo->maxInputChannels);
-				device->prep_buffers(pref_buf, deviceInfo->maxInputChannels, BitDepth, streamRate);
+				devicebuf->prep_circle_buffer(pref_buf);
+				devicebuf->prep_events(deviceInfo->maxInputChannels);
+				devicebuf->prep_buffers(pref_buf, deviceInfo->maxInputChannels, BitDepth, streamRate);
 
 				err = Pa_OpenStream(stream, inParam, NULL, streamRate,
-					pref_buf, paClipOff, create_asio_buffer, device);
-				//data->stream = stream; // update to new stream
+					pref_buf, paClipOff, create_asio_buffer, devicebuf);
+				user_data->stream = *stream; // update to new stream
+				user_data->settings = settings;
+				asioInfo->commonDeviceInfo = *deviceInfo;
+				asioInfo->minBufferSize = min_buf;
+				asioInfo->maxBufferSize = max_buf;
+				asioInfo->preferredBufferSize = pref_buf;
+				asioInfo->bufferGranularity = gran;
+				user_data->info = asioInfo;
+				listener->set_user_data(user_data);
 
 				if (err == paNoError) {
 					blog(LOG_INFO, "ASIO Stream successfully opened.\n");
@@ -1257,11 +1304,11 @@ void asio_update(void *vptr, obs_data_t *settings)
 						if (err == paInvalidSampleRate) {
 							if (rate == 44100 && canDo48) {
 								err = Pa_OpenStream(stream, inParam, NULL, 48000,
-									pref_buf, paClipOff, create_asio_buffer, device);
+									pref_buf, paClipOff, create_asio_buffer, devicebuf);
 							}
 							else if (rate == 48000 && canDo44) {
 								err = Pa_OpenStream(stream, inParam, NULL, 44100,
-									pref_buf, paClipOff, create_asio_buffer, device);
+									pref_buf, paClipOff, create_asio_buffer, devicebuf);
 							}
 
 						}
@@ -1271,9 +1318,9 @@ void asio_update(void *vptr, obs_data_t *settings)
 					blog(LOG_ERROR, "Could not open the stream \n");
 					blog(LOG_ERROR, "PortAudio error : %s\n", Pa_GetErrorText(err));
 				}
-				user_data->stream = stream;
+
 			}
-			device->add_listener(listener);
+			devicebuf->add_listener(listener);
 		}
 	}
 
