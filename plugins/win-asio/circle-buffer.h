@@ -482,6 +482,58 @@ public:
 		ResetEvent(all_recieved_signal_2);
 	}
 
+	void write_buffer_planar(const void* buffer, DWORD BufSize, uint64_t timestamp_on_callback) {
+		if (!all_prepped) {
+			blog(LOG_INFO, "%s device %i is not prepared", __FUNCTION__, device_index);
+			return;
+		}
+		ResetEvent(all_recieved_signal);
+		SetEvent(all_recieved_signal_2);
+		//get as much information from the device that called this function
+		//BASS_ASIO_INFO info;
+		//bool ret = BASS_ASIO_GetInfo(&info);
+		uint8_t ** input_buffer = (uint8_t**)buffer;
+		size_t ch_buffer_size = BufSize / device_options.channel_count; //info.inputs;
+		if (ch_buffer_size > buffer_size) {
+			blog(LOG_WARNING, "%s device needs to reallocate memory");
+		}
+		int byte_depth = bytedepth_format(format);
+		size_t interleaved_frame_size = device_options.channel_count * byte_depth; //info.inputs
+																				   //calculate on the spot
+		size_t frames_count = BufSize / interleaved_frame_size;
+		//use cached value
+		//size_t frames_count = frames;
+
+		device_source_audio* _source_audio = get_writeable_source_audio();
+		if (!_source_audio) {
+			blog(LOG_INFO, "%s _source_audio = NULL", __FUNCTION__);
+			return;
+		}
+
+		audio_format planar_format = get_planar_format(format);
+		//deinterleave directly into buffer (planar)
+		//for (size_t i = 0; i < frames_count; i++) {
+		//	for (size_t j = 0; j < device_options.channel_count; j++) {
+		//		memcpy(_source_audio->data[j] + (i * byte_depth), input_buffer + (j * byte_depth) + (i * interleaved_frame_size), byte_depth);
+		//	}
+		//}
+		for (size_t j = 0; j < device_options.channel_count; j++) {
+			memcpy(_source_audio->data[j], input_buffer[j], ch_buffer_size);
+		}
+		
+
+		_source_audio->format = planar_format;
+		_source_audio->frames = frames_count;
+		_source_audio->input_chs = device_options.channel_count;
+		_source_audio->samples_per_sec = samples_per_sec;
+		_source_audio->timestamp = _source_audio->timestamp = timestamp_on_callback - ((_source_audio->frames * NSEC_PER_SEC) / _source_audio->samples_per_sec);
+
+		write_index++;
+		write_index = write_index % buffer_count;
+		SetEvent(all_recieved_signal);
+		ResetEvent(all_recieved_signal_2);
+	}
+
 	static DWORD WINAPI capture_thread(void *data) {
 		listener_pair *pair = static_cast<listener_pair*>(data);
 		asio_listener *source = pair->asio_listener;//static_cast<asio_listener*>(data);

@@ -49,6 +49,8 @@ public:
 		return unique_active_device;
 	}
 
+	void setSelectedDevice(int index);
+
 	uint32_t getSelectedDevice() {
 		return selected_device;
 	}

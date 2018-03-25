@@ -9,6 +9,9 @@ AsioSelector::AsioSelector(QWidget *parent) :
 	this->load_callback = NULL;
 	this->save_as_callback = NULL;
 	this->save_callback = NULL;
+	ui->activeDevice->setVisible(false);
+	ui->deviceTiming->setVisible(false);
+	ui->optimalFormat->setVisible(false);
 }
 
 AsioSelector::~AsioSelector()
@@ -35,6 +38,14 @@ void AsioSelector::addDevice(std::string device_name, std::vector<double> sample
 	_use_device_timing.push_back(false);
 	QListWidgetItem* item = new QListWidgetItem(device_name.c_str());
 	ui->asioDevicesList->addItem(item);
+
+}
+
+void AsioSelector::setSelectedDevice(int index)
+{
+	QListWidgetItem* item = ui->asioDevicesList->item(index);
+	ui->asioDevicesList->setItemSelected(item, true);
+	on_asioDevicesList_currentRowChanged(index);
 }
 
 std::string AsioSelector::getDeviceName(uint32_t index) {
@@ -227,7 +238,7 @@ void AsioSelector::on_asioDevicesList_currentRowChanged(int currentRow)
 	s = QVariant(current_audio_format[currentRow].c_str());
 	ui->asioDataFormat->setCurrentIndex(ui->asioDataFormat->findText(s.toString()));
 
-	ui->activeDevice->setChecked(_device_active[currentRow]);
+	ui->activeDevice->setChecked(true);
 	ui->lowestLatency->setChecked(_use_minimal_latency[currentRow]);
 	ui->deviceTiming->setChecked(_use_device_timing[currentRow]);
 	ui->optimalFormat->setChecked(_use_optimal_format[currentRow]);
