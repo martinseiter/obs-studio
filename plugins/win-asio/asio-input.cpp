@@ -411,6 +411,7 @@ void asio_selector_init(obs_properties_t *props, void *data) {
 	asio_listener *listener = (asio_listener *)data;
 	if (asioselector == NULL) {
 		asioselector = new AsioSelector();
+		asioselector->setActiveDeviceUnique(true);
 		const PaDeviceInfo *deviceInfo = new PaDeviceInfo;
 		size_t numOfDevices = getDeviceCount();
 		int device_index;
@@ -463,18 +464,26 @@ void asio_selector_init(obs_properties_t *props, void *data) {
 			}
 
 			asioselector->addDevice(std::string(deviceInfo->name), sample_rates, buffer_sizes, audio_formats);
+			buffer_sizes.clear();
 		}
-		asioselector->setActiveDeviceUnique(true);
 		asioselector->setSaveCallback(save_asio_device);
 		load_asio_gui(asioselector, NULL);
 
+		uint32_t selected = asioselector->getSelectedDevice();
+		if (selected < numOfDevices) {
+			obs_property_t *devices = obs_properties_get(props, "device_id");
+			deviceInfo = Pa_GetDeviceInfo(selected);
+			obs_property_list_add_string(devices, deviceInfo->name, deviceInfo->name);
+		}
+		/*
 		if (asioselector->getActiveDevices().size() != 0) {
 			obs_property_t *devices = obs_properties_get(props, "device_id");
 			device_index = asioselector->getActiveDevices()[0];
-			asioselector->setSelectedDevice(device_index);
+			//asioselector->setSelectedDevice(device_index);
 			deviceInfo = Pa_GetDeviceInfo(device_index);
 			obs_property_list_add_string(devices, deviceInfo->name, deviceInfo->name);
 		}
+		*/
 	}
 
 }
@@ -839,7 +848,7 @@ obs_properties_t * asio_get_properties(void *unused)
 	obs_property_t *rate;
 	obs_property_t *bit_depth;
 	obs_property_t *buffer_size;
-	obs_property_t *console;
+	//obs_property_t *console;
 	obs_property_t *route[MAX_AUDIO_CHANNELS];
 	int pad_digits = (int)floor(log10(abs(MAX_AUDIO_CHANNELS))) + 1;
 	const   PaDeviceInfo *deviceInfo = new PaDeviceInfo;
@@ -869,7 +878,7 @@ obs_properties_t * asio_get_properties(void *unused)
 			"But duplication of an ASIO source in different scenes is still possible";
 	obs_property_set_long_description(devices, dev_descr.c_str());
 
-	obs_property_t *gui = obs_properties_add_button(props, "asio gui", "Change device", asio_selector);
+	obs_property_t *gui = obs_properties_add_button(props, "asio gui", "Change Device", asio_selector);
 	std::string sel_descr = "ASIO devices.\n"
 		"Change ASIO device.\n"
 		"Change its settings.";
@@ -897,14 +906,15 @@ obs_properties_t * asio_get_properties(void *unused)
 
 	free(route_name);
 	free(route_obs);
-
+	/*
 	console = obs_properties_add_button(props, "console",
-		obs_module_text("ASIO driver control panel"), DeviceControlPanel);
+		obs_module_text("Control Panel"), DeviceControlPanel);
 	std::string console_descr = "Make sure your settings in the Driver Control Panel\n"
 		"for sample rate and buffer are consistent with what you\n"
 		"have set in OBS.";
 	obs_property_set_long_description(console, console_descr.c_str());
-	obs_property_t *button = obs_properties_add_button(props, "credits", "CREDITS", credits);
+	*/
+	obs_property_t *button = obs_properties_add_button(props, "credits", obs_module_text("Credits"), credits);
 
 	return props;
 }
