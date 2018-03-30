@@ -101,10 +101,10 @@ file(GLOB LIBFDK_BIN_FILES
 	"${Libfdk_INCLUDE_DIR}/bin${_bin_suffix}/libfdk*-*.dll")
 
 file(GLOB RTAUDIO_BIN_FILES
-	"${Libfdk_INCLUDE_DIR}/../bin${_bin_suffix}/rtaudio*-*.dll"
-	"${Libfdk_INCLUDE_DIR}/../bin/rtaudio.dll"
-	"${Libfdk_INCLUDE_DIR}/bin/rtaudio.dll"
-	"${Libfdk_INCLUDE_DIR}/bin${_bin_suffix}/rtaudio*-*.dll")
+	"${Libfdk_INCLUDE_DIR}/../bin${_bin_suffix}/bassasio*-*.dll"
+	"${Libfdk_INCLUDE_DIR}/../bin/bassasio.dll"
+	"${Libfdk_INCLUDE_DIR}/bin/bassasio.dll"
+	"${Libfdk_INCLUDE_DIR}/bin${_bin_suffix}/bassasio*-*.dll")
 	
 file(GLOB SSL_BIN_FILES
 	"${SSL_INCLUDE_DIR}/../bin${_bin_suffix}/ssleay32*.dll"
