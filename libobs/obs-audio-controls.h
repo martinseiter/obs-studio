@@ -175,6 +175,18 @@ EXPORT bool obs_fader_attach_source(obs_fader_t *fader, obs_source_t *source);
  */
 EXPORT void obs_fader_detach_source(obs_fader_t *fader);
 
+/**
+* @brief Attach the fader to a float
+* @param vol pointer to the float
+*/
+EXPORT bool obs_fader_attach_float(obs_fader_t *fader, float *vol);
+
+/**
+* @brief Detach the fader from the currently attached float
+* @param fader pointer to the fader object
+*/
+EXPORT void obs_fader_detach_float(obs_fader_t *fader);
+
 typedef void (*obs_fader_changed_t)(void *param, float db);
 
 EXPORT void obs_fader_add_callback(obs_fader_t *fader,
