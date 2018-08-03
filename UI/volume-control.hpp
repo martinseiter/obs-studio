@@ -260,6 +260,8 @@ signals:
 public:
 	explicit VolControl(OBSSource source, bool showConfig = false,
 			bool vertical = false);
+	explicit VolControl(float *vol, bool showConfig = false,
+			bool vertical = true);
 	~VolControl();
 
 	inline obs_source_t *GetSource() const {return source;}

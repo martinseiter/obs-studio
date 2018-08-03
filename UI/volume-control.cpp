@@ -263,6 +263,165 @@ VolControl::VolControl(OBSSource source_, bool showConfig, bool vertical)
 	VolumeChanged();
 }
 
+VolControl::VolControl(float *vol, bool showConfig, bool vertical)
+: source(nullptr),
+levelTotal(0.0f),
+levelCount(0.0f),
+obs_fader(obs_fader_create(OBS_FADER_CUBIC)),
+obs_volmeter(obs_volmeter_create(OBS_FADER_LOG)),
+vertical(vertical)
+{
+	nameLabel = new QLabel();
+	volLabel = new QLabel();
+	mute = new MuteCheckBox();
+	/*
+	QString sourceName = obs_source_get_name(source);
+	setObjectName(sourceName);
+	*/
+
+	if (showConfig) {
+		config = new QPushButton(this);
+		config->setProperty("themeID", "configIconSmall");
+		config->setFlat(true);
+		config->setSizePolicy(QSizePolicy::Maximum,
+			QSizePolicy::Maximum);
+		config->setMaximumSize(22, 22);
+		config->setAutoDefault(false);
+		/*
+		config->setAccessibleName(QTStr("VolControl.Properties")
+			.arg(sourceName));
+		*/
+		connect(config, &QAbstractButton::clicked,
+			this, &VolControl::EmitConfigClicked);
+	}
+	
+	QVBoxLayout *mainLayout = new QVBoxLayout;
+	mainLayout->setContentsMargins(4, 4, 4, 4);
+	mainLayout->setSpacing(2);
+
+	if (vertical) {
+		QHBoxLayout *nameLayout = new QHBoxLayout;
+		QHBoxLayout *controlLayout = new QHBoxLayout;
+		QHBoxLayout *volLayout = new QHBoxLayout;
+		QHBoxLayout *meterLayout = new QHBoxLayout;
+
+		volMeter = new VolumeMeter(nullptr, obs_volmeter, true);
+		slider = new QSlider(Qt::Vertical);
+
+		nameLayout->setAlignment(Qt::AlignCenter);
+		meterLayout->setAlignment(Qt::AlignCenter);
+		controlLayout->setAlignment(Qt::AlignCenter);
+		volLayout->setAlignment(Qt::AlignCenter);
+
+		nameLayout->setContentsMargins(0, 0, 0, 0);
+		nameLayout->setSpacing(0);
+		nameLayout->addWidget(nameLabel);
+
+		controlLayout->setContentsMargins(0, 0, 0, 0);
+		controlLayout->setSpacing(0);
+
+		if (showConfig)
+			controlLayout->addWidget(config);
+
+		controlLayout->addItem(new QSpacerItem(3, 0));
+		// Add Headphone (audio monitoring) widget here
+		controlLayout->addWidget(mute);
+
+		meterLayout->setContentsMargins(0, 0, 0, 0);
+		meterLayout->setSpacing(0);
+		meterLayout->addWidget(volMeter);
+		meterLayout->addWidget(slider);
+
+		volLayout->setContentsMargins(0, 0, 0, 0);
+		volLayout->setSpacing(0);
+		volLayout->addWidget(volLabel);
+
+		mainLayout->addItem(nameLayout);
+		mainLayout->addItem(volLayout);
+		mainLayout->addItem(meterLayout);
+		mainLayout->addItem(controlLayout);
+
+		setMaximumWidth(110);
+	} else {
+		QHBoxLayout *volLayout = new QHBoxLayout;
+		QHBoxLayout *textLayout = new QHBoxLayout;
+		QHBoxLayout *botLayout = new QHBoxLayout;
+
+		volMeter = new VolumeMeter(nullptr, obs_volmeter, false);
+		slider = new QSlider(Qt::Horizontal);
+
+		textLayout->setContentsMargins(0, 0, 0, 0);
+		textLayout->addWidget(nameLabel);
+		textLayout->addWidget(volLabel);
+		textLayout->setAlignment(nameLabel, Qt::AlignLeft);
+		textLayout->setAlignment(volLabel, Qt::AlignRight);
+
+		volLayout->addWidget(slider);
+		volLayout->addWidget(mute);
+		volLayout->setSpacing(5);
+
+		botLayout->setContentsMargins(0, 0, 0, 0);
+		botLayout->setSpacing(0);
+		botLayout->addLayout(volLayout);
+
+		if (showConfig)
+			botLayout->addWidget(config);
+
+		mainLayout->addItem(textLayout);
+		mainLayout->addWidget(volMeter);
+		mainLayout->addItem(botLayout);
+	}
+
+
+	setLayout(mainLayout);
+
+	QFont font = nameLabel->font();
+	font.setPointSize(font.pointSize()-1);
+
+	//nameLabel->setText(sourceName);
+	nameLabel->setFont(font);
+	volLabel->setFont(font);
+	slider->setMinimum(0);
+	slider->setMaximum(100);
+
+	bool muted = obs_source_muted(source);
+	mute->setChecked(muted);
+	//mute->setAccessibleName(QTStr("VolControl.Mute").arg(sourceName));
+	obs_fader_add_callback(obs_fader, OBSVolumeChanged, this);
+	obs_volmeter_add_callback(obs_volmeter, OBSVolumeLevel, this);
+
+	signal_handler_connect(obs_source_get_signal_handler(source),
+			"mute", OBSVolumeMuted, this);
+
+	QWidget::connect(slider, SIGNAL(valueChanged(int)),
+			this, SLOT(SliderChanged(int)));
+	QWidget::connect(mute, SIGNAL(clicked(bool)),
+			this, SLOT(SetMuted(bool)));
+
+	obs_fader_attach_float(obs_fader, vol);
+	/*
+	obs_volumeter_attach_float(obs_fader, vol);
+	*/
+	/*
+	obs_fader_attach_source(obs_fader, source);
+	obs_volmeter_attach_source(obs_volmeter, source);
+	*/
+	QString styleName = slider->style()->objectName();
+	QStyle *style;
+	style = QStyleFactory::create(styleName);
+	if (!style) {
+		style = new SliderAbsoluteSetStyle();
+	} else {
+		style = new SliderAbsoluteSetStyle(style);
+	}
+
+	style->setParent(slider);
+	slider->setStyle(style);
+
+	/* Call volume changed once to init the slider position and label */
+	VolumeChanged();
+}
+
 VolControl::~VolControl()
 {
 	obs_fader_remove_callback(obs_fader, OBSVolumeChanged, this);
