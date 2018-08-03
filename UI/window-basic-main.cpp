@@ -417,6 +417,15 @@ void OBSBasic::UpdateVolumeControlsDecayRate()
 	}
 }
 
+void OBSBasic::UpdateMasterVolumeControlsDecayRate() {
+	double meterDecayRate = config_get_double(basicConfig, "Audio",
+		"MasterMeterDecayRate");
+
+	for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
+		master_volumes[i]->SetMeterDecayRate(meterDecayRate);
+	}
+}
+
 void OBSBasic::UpdateVolumeControlsPeakMeterType()
 {
 	uint32_t peakMeterTypeIdx = config_get_uint(basicConfig, "Audio",
@@ -440,12 +449,41 @@ void OBSBasic::UpdateVolumeControlsPeakMeterType()
 	}
 }
 
+void OBSBasic::UpdateMasterVolumeControlsPeakMeterType() {
+	uint32_t peakMeterTypeIdx = config_get_uint(basicConfig, "Audio",
+		"MasterPeakMeterType");
+
+	enum obs_peak_meter_type peakMeterType;
+	switch (peakMeterTypeIdx) {
+	case 0:
+		peakMeterType = SAMPLE_PEAK_METER;
+		break;
+	case 1:
+		peakMeterType = TRUE_PEAK_METER;
+		break;
+	default:
+		peakMeterType = SAMPLE_PEAK_METER;
+		break;
+	}
+
+	for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
+		master_volumes[i]->setPeakMeterType(peakMeterType);
+	}
+}
+
 void OBSBasic::ClearVolumeControls()
 {
 	for (VolControl *vol : volumes)
 		delete vol;
 
 	volumes.clear();
+}
+
+void OBSBasic::ClearMasterVolumeControls() {
+	for (VolControl *vol : master_volumes)
+		delete vol;
+
+	master_volumes.clear();
 }
 
 obs_data_array_t *OBSBasic::SaveSceneListOrder()
@@ -1212,6 +1250,9 @@ bool OBSBasic::InitBasicConfigDefaults()
 	config_set_default_double(basicConfig, "Audio", "MeterDecayRate",
 			VOLUME_METER_DECAY_FAST);
 	config_set_default_uint  (basicConfig, "Audio", "PeakMeterType", 0);
+	config_set_default_double(basicConfig, "Audio", "MasterMeterDecayRate",
+		VOLUME_METER_DECAY_FAST);
+	config_set_default_uint(basicConfig, "Audio", "MasterPeakMeterType", 0);
 
 	return true;
 }
@@ -2468,6 +2509,16 @@ void OBSBasic::HideAudioControl()
 	}
 }
 
+void OBSBasic::HideMasterAudioControl() {
+	QAction *action = reinterpret_cast<QAction*>(sender());
+	VolControl *vol = action->property("volControl").value<VolControl*>();
+
+	//if (!SourceMixerHidden(source)) {
+	//	SetSourceMixerHidden(source, true);
+	//	DeactivateAudioSource(source);
+	//}
+}
+
 void OBSBasic::UnhideAllAudioControls()
 {
 	auto UnhideAudioMixer = [this] (obs_source_t *source) /* -- */
@@ -2568,7 +2619,7 @@ void OBSBasic::MasterVolControlContextMenu()
 	/* ------------------- */
 
 	connect(&hideAction, &QAction::triggered,
-			this, &OBSBasic::HideAudioControl,
+			this, &OBSBasic::HideMasterAudioControl,
 			Qt::DirectConnection);
 	connect(&unhideAllAction, &QAction::triggered,
 			this, &OBSBasic::UnhideAllAudioControls,
@@ -2888,35 +2939,24 @@ void OBSBasic::ActivateAudioSource(OBSSource source)
 		else
 			ui->hVolControlLayout->addWidget(volume);
 	}
-	/* need to find entry for tracks 
-	for (auto volume : master_volumes) {
-		if (vertical)
-			ui->vMasterVolControlLayout->addWidget(volume);
-		else
-			ui->hMasterVolControlLayout->addWidget(volume);
-	}
-	*/
 }
 
 void OBSBasic::InitAudioMaster() {
 
 	bool vertical = config_get_bool(GetGlobalConfig(), "BasicWindow",
 		"VerticalMasterVolControl");
-	float *tracks[6];
-	VolControl *vol[6];
-	for (int i = 0; i < 5; i++) {
+	float *tracks[MAX_AUDIO_MIXES];
+	VolControl *vol[MAX_AUDIO_MIXES];
+	for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
 		tracks[i] = new float;
 		vol[i] = new VolControl(tracks[i], true, vertical);
 	}
 
-	// to do : adapt the rest to the tracks
-
-	/*double meterDecayRate = config_get_double(basicConfig, "Audio",
-		"MeterDecayRate");
-	vol->SetMeterDecayRate(meterDecayRate);
+	double meterDecayRate = config_get_double(basicConfig, "Audio",
+		"MasterMeterDecayRate");
 
 	uint32_t peakMeterTypeIdx = config_get_uint(basicConfig, "Audio",
-		"PeakMeterType");
+		"MasterPeakMeterType");
 
 	enum obs_peak_meter_type peakMeterType;
 	switch (peakMeterTypeIdx) {
@@ -2931,32 +2971,28 @@ void OBSBasic::InitAudioMaster() {
 		break;
 	}
 
-	vol->setPeakMeterType(peakMeterType);
+	for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
+		vol[i]->SetMeterDecayRate(meterDecayRate);
+		vol[i]->setPeakMeterType(peakMeterType);
+		vol[i]->setContextMenuPolicy(Qt::CustomContextMenu);
 
-	vol->setContextMenuPolicy(Qt::CustomContextMenu);
+		connect(vol[i], &QWidget::customContextMenuRequested,
+			this, &OBSBasic::MasterVolControlContextMenu);
+		connect(vol[i], &VolControl::ConfigClicked,
+			this, &OBSBasic::MasterVolControlContextMenu);
 
-	connect(vol, &QWidget::customContextMenuRequested,
-		this, &OBSBasic::VolControlContextMenu);
-	connect(vol, &VolControl::ConfigClicked,
-		this, &OBSBasic::VolControlContextMenu);
-
-	InsertQObjectByName(volumes, vol);
-
-	for (auto volume : volumes) {
-		if (vertical)
-			ui->vVolControlLayout->addWidget(volume);
-		else
-			ui->hVolControlLayout->addWidget(volume);
-	}*/
-	/* need to find entry for tracks
-	for (auto volume : master_volumes) {
-	if (vertical)
-	ui->vMasterVolControlLayout->addWidget(volume);
-	else
-	ui->hMasterVolControlLayout->addWidget(volume);
+		InsertQObjectByName(master_volumes, vol[i]);
 	}
-	*/
+
+	for (auto volume : master_volumes) {
+		if (vertical)
+			ui->vMasterVolControlLayout->addWidget(volume);
+		else
+			ui->hMasterVolControlLayout->addWidget(volume);
+	}
+
 }
+
 void OBSBasic::DeactivateAudioSource(OBSSource source)
 {
 	for (size_t i = 0; i < volumes.size(); i++) {

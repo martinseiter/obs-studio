@@ -206,6 +206,10 @@ private:
 	void          UpdateVolumeControlsPeakMeterType();
 	void          ClearVolumeControls();
 
+	void          UpdateMasterVolumeControlsDecayRate();
+	void          UpdateMasterVolumeControlsPeakMeterType();
+	void          ClearMasterVolumeControls();
+
 	void          UploadLog(const char *subdir, const char *file);
 
 	void          Save(const char *file);
@@ -460,6 +464,8 @@ private slots:
 
 	void HideAudioControl();
 	void UnhideAllAudioControls();
+	void HideMasterAudioControl();
+//	void UnhideAllMasterAudioControls();
 	void ToggleHideMixer();
 
 	void MixerRenameSource();
