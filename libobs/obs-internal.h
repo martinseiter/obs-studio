@@ -308,6 +308,13 @@ struct obs_core_audio {
 	char                            *monitoring_device_id;
 };
 
+struct obs_audio_mixes {
+	float volume[MAX_AUDIO_MIXES];
+	bool muted[MAX_AUDIO_MIXES];
+	bool stream_enabled[MAX_AUDIO_MIXES];
+	bool recording_enabled[MAX_AUDIO_MIXES];
+};
+
 /* user sources, output channels, and displays */
 struct obs_core_data {
 	struct obs_source               *first_source;
@@ -316,6 +323,8 @@ struct obs_core_data {
 	struct obs_output               *first_output;
 	struct obs_encoder              *first_encoder;
 	struct obs_service              *first_service;
+
+	struct obs_audio_mixes          audio_mixes;
 
 	pthread_mutex_t                 sources_mutex;
 	pthread_mutex_t                 displays_mutex;

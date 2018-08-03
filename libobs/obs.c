@@ -565,6 +565,13 @@ static bool obs_init_data(void)
 	if (!obs_view_init(&data->main_view))
 		goto fail;
 
+	for (size_t i = 0; i < MAX_AUDIO_MIXES; i++) {
+		data->audio_mixes.volume[i] = 1.0;
+		data->audio_mixes.muted[i] = false;
+		data->audio_mixes.recording_enabled[i] = false;
+		data->audio_mixes.stream_enabled[i] = false;
+	}
+
 	data->valid = true;
 
 fail:

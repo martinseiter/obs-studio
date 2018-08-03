@@ -45,7 +45,7 @@ static inline size_t convert_time_to_frames(size_t sample_rate, uint64_t t)
 
 static inline void mix_audio(struct audio_output_data *mixes,
 		obs_source_t *source, size_t channels, size_t sample_rate,
-		struct ts_info *ts)
+		struct ts_info *ts, float *vol_data)
 {
 	size_t total_floats = AUDIO_OUTPUT_FRAMES;
 	size_t start_point = 0;
@@ -61,7 +61,7 @@ static inline void mix_audio(struct audio_output_data *mixes,
 
 		total_floats -= start_point;
 	}
-
+	
 	for (size_t mix_idx = 0; mix_idx < MAX_AUDIO_MIXES; mix_idx++) {
 		for (size_t ch = 0; ch < channels; ch++) {
 			register float *mix = mixes[mix_idx].data[ch];
@@ -73,7 +73,7 @@ static inline void mix_audio(struct audio_output_data *mixes,
 			end = aud + total_floats;
 
 			while (aud < end)
-				*(mix++) += *(aud++);
+				*(mix++) += *(aud++) * vol_data[mix_idx];
 		}
 	}
 }
@@ -446,7 +446,7 @@ bool audio_callback(void *param,
 
 			if (source->audio_output_buf[0][0] && source->audio_ts)
 				mix_audio(mixes, source, channels, sample_rate,
-						&ts);
+						&ts, &data->audio_mixes.volume[0]);
 
 			pthread_mutex_unlock(&source->audio_buf_mutex);
 		}
