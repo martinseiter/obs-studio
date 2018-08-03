@@ -510,7 +510,7 @@ static void volmeter_process_audio_data(obs_volmeter_t *volmeter,
 	volmeter_process_peak(volmeter, data, nr_channels);
 	volmeter_process_magnitude(volmeter, data, nr_channels);
 }
-
+ 
 static void volmeter_source_data_received(void *vptr, obs_source_t *source,
 		const struct audio_data *data, bool muted)
 {
