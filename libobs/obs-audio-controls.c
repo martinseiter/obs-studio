@@ -47,6 +47,7 @@ struct obs_fader {
 	obs_fader_conversion_t def_to_db;
 	obs_fader_conversion_t db_to_def;
 	obs_source_t           *source;
+	float                  *vol;
 	enum obs_fader_type    type;
 	float                  max_db;
 	float                  min_db;
@@ -624,12 +625,15 @@ bool obs_fader_set_db(obs_fader_t *fader, const float db)
 
 	fader->ignore_next_signal = true;
 	obs_source_t *src         = fader->source;
+	float        *vol         = fader->vol;
 	const float mul           = db_to_mul(fader->cur_db);
 
 	pthread_mutex_unlock(&fader->mutex);
 
 	if (src)
 		obs_source_set_volume(src, mul);
+	else if (vol)
+		*vol = mul;
 
 	return !clamped;
 }
@@ -711,6 +715,28 @@ bool obs_fader_attach_source(obs_fader_t *fader, obs_source_t *source)
 	pthread_mutex_unlock(&fader->mutex);
 
 	return true;
+}
+
+void obs_fader_detach_float(obs_fader_t *fader)
+{
+	if (!fader)
+		return;
+
+	pthread_mutex_lock(&fader->mutex);
+	fader->source = NULL;
+	pthread_mutex_unlock(&fader->mutex);
+}
+
+bool obs_fader_attach_float(obs_fader_t *fader, float *vol)
+{
+	if (!fader || !vol)
+		return false;
+
+	pthread_mutex_lock(&fader->mutex);
+	fader->vol = vol;
+	fader->cur_db = mul_to_db(*vol);
+	pthread_mutex_unlock(&fader->mutex);
+	
 }
 
 void obs_fader_detach_source(obs_fader_t *fader)
