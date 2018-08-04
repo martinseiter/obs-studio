@@ -260,7 +260,7 @@ signals:
 public:
 	explicit VolControl(OBSSource source, bool showConfig = false,
 			bool vertical = false);
-	explicit VolControl(float *vol, bool showConfig = false,
+	explicit VolControl(float *vol, int trackIndex, bool showConfig = false,
 			bool vertical = true);
 	~VolControl();
 

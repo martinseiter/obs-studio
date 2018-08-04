@@ -1,6 +1,7 @@
 #include "volume-control.hpp"
 #include "qt-wrappers.hpp"
 #include "obs-app.hpp"
+#include "window-basic-main.hpp"
 #include "mute-checkbox.hpp"
 #include "slider-absoluteset-style.hpp"
 #include <QFontDatabase>
@@ -263,7 +264,7 @@ VolControl::VolControl(OBSSource source_, bool showConfig, bool vertical)
 	VolumeChanged();
 }
 
-VolControl::VolControl(float *vol, bool showConfig, bool vertical)
+VolControl::VolControl(float *vol, int trackIndex, bool showConfig, bool vertical)
 : source(nullptr),
 levelTotal(0.0f),
 levelCount(0.0f),
@@ -274,10 +275,16 @@ vertical(vertical)
 	nameLabel = new QLabel();
 	volLabel = new QLabel();
 	mute = new MuteCheckBox();
-	/*
-	QString sourceName = obs_source_get_name(source);
-	setObjectName(sourceName);
-	*/
+
+	OBSBasic *main = reinterpret_cast<OBSBasic*>(App()->GetMainWindow());
+
+	std::string trackNum = "Track" + std::to_string(trackIndex + 1) + "Name";
+	const char *nameAdv = config_get_string(main->Config(), "AdvOut",
+			trackNum.c_str());
+	trackNum = "Track " + std::to_string(trackIndex + 1);
+	const char *name2 = nameAdv ? nameAdv : trackNum.c_str();
+	QString trackName = QString::fromUtf8(name2);
+	setObjectName(trackName);
 
 	if (showConfig) {
 		config = new QPushButton(this);
@@ -287,10 +294,10 @@ vertical(vertical)
 			QSizePolicy::Maximum);
 		config->setMaximumSize(22, 22);
 		config->setAutoDefault(false);
-		/*
+
 		config->setAccessibleName(QTStr("VolControl.Properties")
-			.arg(sourceName));
-		*/
+			.arg(trackName));
+
 		connect(config, &QAbstractButton::clicked,
 			this, &VolControl::EmitConfigClicked);
 	}
@@ -316,6 +323,7 @@ vertical(vertical)
 		nameLayout->setContentsMargins(0, 0, 0, 0);
 		nameLayout->setSpacing(0);
 		nameLayout->addWidget(nameLabel);
+
 
 		controlLayout->setContentsMargins(0, 0, 0, 0);
 		controlLayout->setSpacing(0);
@@ -378,7 +386,7 @@ vertical(vertical)
 	QFont font = nameLabel->font();
 	font.setPointSize(font.pointSize()-1);
 
-	//nameLabel->setText(sourceName);
+	nameLabel->setText(trackName);
 	nameLabel->setFont(font);
 	volLabel->setFont(font);
 	slider->setMinimum(0);
@@ -386,7 +394,7 @@ vertical(vertical)
 
 	bool muted = obs_source_muted(source);
 	mute->setChecked(muted);
-	//mute->setAccessibleName(QTStr("VolControl.Mute").arg(sourceName));
+	mute->setAccessibleName(QTStr("VolControl.Mute").arg(trackName));
 	obs_fader_add_callback(obs_fader, OBSVolumeChanged, this);
 	obs_volmeter_add_callback(obs_volmeter, OBSVolumeLevel, this);
 

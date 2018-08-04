@@ -2940,7 +2940,7 @@ void OBSBasic::InitAudioMaster() {
 	VolControl *vol[MAX_AUDIO_MIXES];
 	for (int i = 0; i < MAX_AUDIO_MIXES; i++) {
 		//tracks[i] = new float;
-		vol[i] = new VolControl(&mixes[i], true, vertical);
+		vol[i] = new VolControl(&mixes[i], i, true, vertical);
 	}
 
 	double meterDecayRate = config_get_double(basicConfig, "Audio",
